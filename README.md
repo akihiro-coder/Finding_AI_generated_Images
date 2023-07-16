@@ -1,0 +1,2 @@
+# Finding_AI_generated_Images
+生成AIにより生成された画像とオリジナルの画像の分類
