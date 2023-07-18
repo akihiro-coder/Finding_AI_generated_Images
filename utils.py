@@ -7,7 +7,8 @@ from torchvision import models, transforms
 from albumentations import RandomBrightnessContrast
 from albumentations import ShiftScaleRotate
 from PIL import Image
-import cv2 as cv
+import csv
+import pandas as pd
 
 
 class ImageTransform():
@@ -34,8 +35,8 @@ class ImageTransform():
                 transforms.RandomHorizontalFlip(),
                 transforms.ToTensor(),  # to tensor and scale the values[0, 1]
                 transforms.Normalize(mean, std),
-                RandomBrightnessContrast(),
-                ShiftScaleRotate(),
+                # RandomBrightnessContrast(),
+                # ShiftScaleRotate(),
             ]),
             'val': transforms.Compose([
                 transforms.Resize(resize),  # リサイズ
@@ -49,29 +50,27 @@ class ImageTransform():
         """
         Parameters
         ----------
-        img : 
+        img : PIL image
         phase : 'train' or 'val'
             前処理のモードを指定。
         """
         return self.data_transform[phase](img)
 
 
+def preprocess_test(img_path, save_path='img_transformed.png', resize=500, mean=(0.5, 0.5, 0.5), std=(0.5, 0.5, 0.5), phase='train'):
+    """
+    Parameters
+    ----------
+    img_path : str
+    """
+    img = Image.open(img_path)
+    transform = ImageTransform(resize, mean, std)
+    img_transformed = transform(img, phase)
+    img = transforms.functional.to_pil_image(img_transformed)
+    img.save(save_path)
 
 
-# img = cv.imread('./data/train_1/train_0.png')
-img = Image.open('./data/train_1/train_0.png')
-resize = 500
-mean = (0.5, 0.5, 0.5)
-std = (0.5, 0.5, 0.5)
-
-transform = ImageTransform(resize, mean, std)
-img_transformed = transform(img, 'train')
-
-
-
-
-
-def make_datapath_list(data_dir, split_ratio):
+def make_datapath_list(data_dir, split_ratio=0.8):
     """
     データのパスを格納したリストを作成
     Parameters
@@ -79,7 +78,7 @@ def make_datapath_list(data_dir, split_ratio):
     data_dir : str
         データが格納されたディレクトリパス
     split_ratio : float
-        データ全体のうちの訓練データの割合
+        データ全体のうちの訓練データの割合 default: 0.8
 
     Returns
     -------
@@ -103,24 +102,52 @@ def make_datapath_list(data_dir, split_ratio):
     return train_file_list, valid_file_list
 
 
+def extract_label_from_csv(csv_path, img_path):
+    """
+    test_0.png, 1
+    test_1.png, 0
+    test_2.png, 1
+    .......
+    のようなcsvファイルからラベルを画像ファイル名から抜き出す関数
+
+    Parameters
+    ----------
+    csv_path: str
+        csvファイルのパス
+    img_path: str
+        画像ファイルパス　
+
+    Returns
+    -------
+    label : str
+    """
+    df = pd.read_csv(csv_path, names=('file', 'label'))
+    labels = df['label']
+    img_filename = os.path.split(img_path)[1]
+    img_file_num = int(img_filename.split("_")[1].split(".")[0])
+    label = labels[img_file_num]
+    return label
+
+
 class Dataset(data.Dataset):
     """
-    アリとハチの画像のDatasetクラス。PyTorchのDatasetクラスを継承。
+    オリジナル画像と生成画像のDatasetクラス。PyTorchのDatasetクラスを継承。
 
     Attributes
     ----------
-    file_list : リスト
+    file_list : list
         画像のパスを格納したリスト
     transform : object
         前処理クラスのインスタンス
-    phase : 'train' or 'test'
-        学習か訓練かを設定する。
+    phase : str
+        'train' or 'test' 学習か訓練かを設定
     """
 
-    def __init__(self, file_list, transform=None, phase='train'):
+    def __init__(self, file_list, transform=None, phase='train', csv_path='./data/train_1.csv'):
         self.file_list = file_list  # ファイルパスのリスト
         self.transform = transform  # 前処理クラスのインスタンス
         self.phase = phase  # train or valの指定
+        self.csv_path = csv_path
 
     def __len__(self):
         '''画像の枚数を返す'''
@@ -133,22 +160,12 @@ class Dataset(data.Dataset):
 
         # index番目の画像をロード
         img_path = self.file_list[index]
-        img = Image.open(img_path)  # [高さ][幅][色RGB]
+        img = Image.open(img_path)  # h, w, c
 
         # 画像の前処理を実施
-        img_transformed = self.transform(
-            img, self.phase)  # torch.Size([3, 224, 224])
+        img_transformed = self.transform(img, self.phase)  # torch.Size([3, 224, 224])
 
         # 画像のラベルをファイル名から抜き出す
-        if self.phase == "train":
-            label = img_path[30:34]
-        elif self.phase == "val":
-            label = img_path[28:32]
-
-        # ラベルを数値に変更する
-        if label == "ants":
-            label = 0
-        elif label == "bees":
-            label = 1
+        label = extract_label_from_csv(self.csv_path, img_path)
 
         return img_transformed, label
