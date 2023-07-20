@@ -102,13 +102,13 @@ def make_datapath_list(data_dir, split_ratio=0.8):
     return train_file_list, valid_file_list
 
 
-def extract_label_from_csv(csv_path, img_path):
+def get_label(csv_path, img_path):
     """
     test_0.png, 1
     test_1.png, 0
     test_2.png, 1
     .......
-    のようなcsvファイルからラベルを画像ファイル名から抜き出す関数
+    のように書かれたcsvファイルからラベルを画像ファイル名から抜き出す関数
 
     Parameters
     ----------
@@ -166,6 +166,6 @@ class Dataset(data.Dataset):
         img_transformed = self.transform(img, self.phase)  # torch.Size([3, 224, 224])
 
         # 画像のラベルをファイル名から抜き出す
-        label = extract_label_from_csv(self.csv_path, img_path)
+        label = get_label(self.csv_path, img_path)
 
         return img_transformed, label
