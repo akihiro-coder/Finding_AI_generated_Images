@@ -122,11 +122,17 @@ def get_label(csv_path, img_path):
     label : str
     """
     df = pd.read_csv(csv_path, names=('file', 'label'))
+    # file列からファイル名を探す
+    files = df['file']
+    # あったら、その行のインデックスを記録
+    for idx, file in enumerate(files):
+        if file in img_path:
+            correct_idx = idx
+            break
+    # 記録したインデックスのlabel列を探す
     labels = df['label']
-    img_filename = os.path.split(img_path)[1]
-    img_file_num = int(img_filename.split("_")[1].split(".")[0])
-    label = labels[img_file_num]
-    return label
+    correct_label = labels[correct_idx]
+    return correct_label
 
 
 class Dataset(data.Dataset):
@@ -140,7 +146,7 @@ class Dataset(data.Dataset):
     transform : object
         前処理クラスのインスタンス
     phase : str
-        'train' or 'test' 学習か訓練かを設定
+        'train'or'val' 学習か検証かを設定
     """
 
     def __init__(self, file_list, transform=None, phase='train', csv_path='./data/train_1.csv'):
@@ -165,7 +171,56 @@ class Dataset(data.Dataset):
         # 画像の前処理を実施
         img_transformed = self.transform(img, self.phase)  # torch.Size([3, 224, 224])
 
-        # 画像のラベルをファイル名から抜き出す
+        # 画像の正解ラベルをcsvファイルから抜き出す
         label = get_label(self.csv_path, img_path)
 
         return img_transformed, label
+
+
+def train_model(net, dataloaders_dict, criterion, optimizer, num_epochs):
+
+    device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
+    net.to(device)
+
+    # ネットワークがある程度固定であれば、高速化させる
+    torch.backends.cudnn.benchmark = True
+
+    # epoch loop
+    for epoch in range(num_epochs):
+        print(f"epoch {epoch+1}/{num_epochs}")
+        print('----------------------')
+
+        # epochごとの訓練と検証のループ
+        for phase in ['train', 'val']:
+            if phase == 'train':
+                net.train()
+            else:
+                net.eval()
+
+            epoch_loss = 0.0  # epochの損失和
+            epoch_corrects = 0.0  # epochの正解数
+
+            if (epoch == 0) and (phase == 'train'):
+                continue
+
+            # データローダーからミニバッチを取り出すループ
+            for inputs, labels in tqdm(dataloaders_dict[phase]):
+                inputs = inputs.to(device)
+                labels = labels.to(device)
+                optimizer.zero_grad()
+                with torch.set_grad_enabled(phase == 'train'):  # 学習時にのみ勾配計算する設定
+                    outputs = net(inputs)
+                    loss = criterion(outputs, labels)
+                    _, preds = torch.max(outputs, 1)
+
+                    if phase == 'train':
+                        loss.backward()
+                        optimizer.step()  # parameters' update
+
+                    epoch_loss += loss.item() * inputs.size(0)  # average loss * mini-batch size
+                    epoch_corrects += torch.sum(preds == labels.data)
+
+            epoch_loss = epoch_loss / len(dataloaders_dict[phase].dataset)  # epochごとのloss, 正解率を表示
+            epoch_acc = epoch_corrects.double() / len(dataloaders_dict[phase].dataset)
+
+            print('{} Loss: {:.4f} Acc: {:.4f}'.format(phase, epoch_loss, epoch_acc))
