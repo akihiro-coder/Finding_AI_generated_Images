@@ -16,7 +16,7 @@ def main():
     train_file_list, valid_file_list = make_datapath_list('./data/train_1')
 
     # datasetを作成
-    size = 512  # discussionより引用　
+    size = 512  # discussion pageより引用　
     mean = (0.485, 0.456, 0.406)
     std = (0.229, 0.224, 0.225)
     train_dataset = Dataset(train_file_list, transform=ImageTransform(size, mean, std), phase="train")
@@ -42,38 +42,19 @@ def main():
     criterion = nn.CrossEntropyLoss()
 
     # 最適化手法の設定
-    # 学習させるパラメータとそうでないパラメータを分ける
-    # 学習させるパラメータを格納するリスト
-    params_to_update_1 = []
-    params_to_update_2 = []
-    params_to_update_3 = []
+    params_to_update = []  # to store parameters that will train
+    update_param_names = ['fc.weight', 'fc.bias']
 
-    # 学習させる層のパラメータ名を追加
-    update_params_names_1 = ["features"]
-    update_params_names_2 = ["classifier.0.weight", "classifier.0.bias",
-                             "classifier.3.weight", "classifier.3.bias"]
-    update_params_names_3 = ["classifier.6.weight", "classifier.6.bias"]
     for name, param in net.named_parameters():
-        if update_params_names_1[0] in name:
+        if name in update_param_names:
             param.requires_grad = True
-            params_to_update_1.append(param)
-        elif name in update_params_names_2:
-            param.requires_grad = True
-            params_to_update_2.append(param)
-        elif name in update_params_names_3:
-            param.requires_grad = True
-            params_to_update_3.append(param)
+            params_to_update.append(param)
         else:
             param.requires_grad = False
 
-    # 各パラメータに最適化手法を設定する
-    optimizer = optim.SGD([
-        {"params": params_to_update_1, "lr": 1e-4},
-        {"params": params_to_update_2, "lr": 5e-4},
-        {"params": params_to_update_3, "lr": 1e-3},
-    ], momentum=0.9)
+    optimizer = optim.SGD(params=params_to_update, lr=0.001, momentum=0.9)
 
-    num_epochs = 2
+    num_epochs = 15
     train_model(net, dataloaders_dict, criterion, optimizer, num_epochs)
 
 
