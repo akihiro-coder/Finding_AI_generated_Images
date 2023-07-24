@@ -9,6 +9,9 @@ from albumentations import ShiftScaleRotate
 from PIL import Image
 import csv
 import pandas as pd
+from tqdm import tqdm
+import matplotlib.pyplot as plt
+import numpy as np
 
 
 class ImageTransform():
@@ -177,6 +180,51 @@ class Dataset(data.Dataset):
         return img_transformed, label
 
 
+    
+
+def save_graph(x, data, x_label, y_label, graph_title, save_path):
+    """
+    グラフを作成し保存する関数
+
+    Parameters
+    ----------
+    x: ndarray
+        x座標
+    data: list or ndarray
+        y座標  array-likeを要素とするndarray
+    x_label: str
+        x軸のラベル名
+    y_label: str
+        y軸のラベル名
+    graph_title: str
+        グラフタイトル
+    save_path: str
+        グラフの保存名
+
+    Returns
+    -------
+    None
+    """
+
+
+    fig, ax = plt.subplots()
+    colors = ['red', 'blue']
+
+    for y, color in zip(data, colors):
+        ax.plot(x, y, color=color, marker='o',mfc='pink')
+
+    # name
+    ax.set_ylabel(y_label) # set the label for y axis
+    ax.set_xlabel(x_label) # set the label for x-axis
+    ax.set_title(graph_title) # set the title of the graph
+
+    fig.tight_layout()
+
+    fig.savefig(save_path)
+
+    
+
+
 def train_model(net, dataloaders_dict, criterion, optimizer, num_epochs):
 
     device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
@@ -200,6 +248,7 @@ def train_model(net, dataloaders_dict, criterion, optimizer, num_epochs):
             epoch_loss = 0.0  # epochの損失和
             epoch_corrects = 0.0  # epochの正解数
 
+            # 未学習時の検証性能を確かめるため、epoch=0の訓練は省略
             if (epoch == 0) and (phase == 'train'):
                 continue
 
@@ -215,7 +264,7 @@ def train_model(net, dataloaders_dict, criterion, optimizer, num_epochs):
 
                     if phase == 'train':
                         loss.backward()
-                        optimizer.step()  # parameters' update
+                        optimizer.step()  # parameters update
 
                     epoch_loss += loss.item() * inputs.size(0)  # average loss * mini-batch size
                     epoch_corrects += torch.sum(preds == labels.data)
