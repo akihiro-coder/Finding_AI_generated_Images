@@ -8,10 +8,6 @@ from tqdm import tqdm
 
 def main():
 
-    # MAX_SPLIT_SIZE_MB = 21
-    # メモリアロケーターの最大分割サイズを小さめに設定（vramの断片化を防ぐ）
-    # torch.cuda.memory._set_allocator_settings(f"max_split_size_mb:{MAX_SPLIT_SIZE_MB}")
-
     # オリジナル画像と生成画像へのファイルパスのリストを作成
     train_file_list, valid_file_list = make_datapath_list('./data/train_1')
 
@@ -38,12 +34,17 @@ def main():
     # resnet34の最後の出力層の出力ユニットを0,1の2つに付け加える
     net.fc = nn.Linear(in_features=512, out_features=2)
 
+    net.fc = nn.Sequential(
+        net.fc,
+        nn.Softmax(),
+    )
+
     # 損失関数の定義
     criterion = nn.CrossEntropyLoss()
 
     # 最適化手法の設定
     params_to_update = []  # to store parameters that will train
-    update_param_names = ['fc.weight', 'fc.bias']
+    update_param_names = ['fc.0.weight', 'fc.0.bias']
 
     for name, param in net.named_parameters():
         if name in update_param_names:
@@ -54,9 +55,17 @@ def main():
 
     optimizer = optim.SGD(params=params_to_update, lr=0.001, momentum=0.9)
 
-    num_epochs = 15
+    num_epochs = 2
     train_model(net, dataloaders_dict, criterion, optimizer, num_epochs)
 
+
+
+    x = torch.randn([1, 3, size, size]).to('cuda:0')
+    outputs = net(x)
+    print(outputs)
+    max_value, idx = torch.max(input=outputs, dim=1)
+    print(max_value)
+    print(idx)
 
 if __name__ == "__main__":
     main()
