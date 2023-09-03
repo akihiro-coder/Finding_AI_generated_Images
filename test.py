@@ -1,9 +1,16 @@
+import glob
+import os
+import cv2 as cv
+import numpy as np
 import torch
 import torch.nn as nn
 from torchvision import models
-from utils import ImageTransform, make_datapath_list, Dataset, train_model
+from torchvision.io import read_image
+from utils import ImageTransform, make_datapath_list, Dataset, train_model, prepare_input
 import torch.optim as optim
 from tqdm import tqdm
+
+debug = False
 
 
 def main():
@@ -56,16 +63,25 @@ def main():
     optimizer = optim.SGD(params=params_to_update, lr=0.001, momentum=0.9)
 
     num_epochs = 2
-    train_model(net, dataloaders_dict, criterion, optimizer, num_epochs)
+    if not debug:
+        train_model(net, dataloaders_dict, criterion, optimizer, num_epochs)
 
+    # test image
+    test_file_list = []
+    data_dir = './data/evaluation/'
+    testdata_path_list = glob.glob(os.path.join(data_dir + '/*.png'))
+    device = 'cuda:0' if torch.cuda.is_available() else 'cpu'
+    for data_path in testdata_path_list:
+        # preprocess
+        image = prepare_input(data_path, size, mean, std)
+        image = image.to(device)  # on GPU
 
+        # inference
+        net.eval()
+        outputs = net(image)
+        max_value, _ = torch.max(input=outputs, dim=1)
+        # TODO: csvファイルを生成する
 
-    x = torch.randn([1, 3, size, size]).to('cuda:0')
-    outputs = net(x)
-    print(outputs)
-    max_value, idx = torch.max(input=outputs, dim=1)
-    print(max_value)
-    print(idx)
 
 if __name__ == "__main__":
     main()

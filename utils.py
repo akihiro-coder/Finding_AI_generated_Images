@@ -273,3 +273,64 @@ def train_model(net, dataloaders_dict, criterion, optimizer, num_epochs):
             epoch_acc = epoch_corrects.double() / len(dataloaders_dict[phase].dataset)
 
             print('{} Loss: {:.4f} Acc: {:.4f}'.format(phase, epoch_loss, epoch_acc))
+
+
+
+def prepare_input(data_path, size, mean, std):
+    img_org = Image.open(data_path)
+    preprocess = transforms.Compose([
+        transforms.Resize(size),  # リサイズ
+        transforms.CenterCrop(size),  # 画像中央をresize×resizeで切り取り
+        transforms.ToTensor(),  # テンソルに変換
+        transforms.Normalize(mean, std)  # 標準化
+    ])
+    img = preprocess(img_org)
+    input = torch.unsqueeze(img, 0) # expand dims
+    return input
+
+
+
+# def fine_tuning(net):
+#     """
+#     ファインチューニングの設定をする関数
+
+#     Parameters
+#     ----------
+#     net: ネットワーク
+
+#     Return 
+#     ------
+#     なし
+#     """
+
+#     # 最適化手法の設定
+#     # 学習させるパラメータとそうでないパラメータを分ける
+#     # 学習させるパラメータを格納するリスト
+#     params_to_update_1 = []
+#     params_to_update_2 = []
+#     params_to_update_3 = []
+
+#     # 学習させる層のパラメータ名を追加
+#     update_params_names_1 = ["features"]
+#     update_params_names_2 = ["classifier.0.weight", "classifier.0.bias",
+#                              "classifier.3.weight", "classifier.3.bias"]
+#     update_params_names_3 = ["classifier.6.weight", "classifier.6.bias"]
+#     for name, param in net.named_parameters():
+#         if update_params_names_1[0] in name:
+#             param.requires_grad = True
+#             params_to_update_1.append(param)
+#         elif name in update_params_names_2:
+#             param.requires_grad = True
+#             params_to_update_2.append(param)
+#         elif name in update_params_names_3:
+#             param.requires_grad = True
+#             params_to_update_3.append(param)
+#         else:
+#             param.requires_grad = False
+
+#     # 各パラメータに最適化手法を設定する
+#     optimizer = optim.SGD([
+#         {"params": params_to_update_1, "lr": 1e-4},
+#         {"params": params_to_update_2, "lr": 5e-4},
+#         {"params": params_to_update_3, "lr": 1e-3},
+#     ], momentum=0.9)
