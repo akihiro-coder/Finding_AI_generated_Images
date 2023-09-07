@@ -2,6 +2,9 @@ import glob
 import os
 import cv2 as cv
 import numpy as np
+import csv
+import pandas as pd
+from tqdm import tqdm
 import torch
 import torch.nn as nn
 from torchvision import models
@@ -41,18 +44,12 @@ def main():
     # resnet34の最後の出力層の出力ユニットを0,1の2つに付け加える
     net.fc = nn.Linear(in_features=512, out_features=2)
 
-    net.fc = nn.Sequential(
-        net.fc,
-        nn.Softmax(),
-    )
-
     # 損失関数の定義
     criterion = nn.CrossEntropyLoss()
 
     # 最適化手法の設定
     params_to_update = []  # to store parameters that will train
-    update_param_names = ['fc.0.weight', 'fc.0.bias']
-
+    update_param_names = ['fc.weight', 'fc.bias']
     for name, param in net.named_parameters():
         if name in update_param_names:
             param.requires_grad = True
@@ -62,25 +59,41 @@ def main():
 
     optimizer = optim.SGD(params=params_to_update, lr=0.001, momentum=0.9)
 
-    num_epochs = 2
+    # train
+    num_epochs = 15
     if not debug:
         train_model(net, dataloaders_dict, criterion, optimizer, num_epochs)
 
     # test image
+    device = 'cuda:0' if torch.cuda.is_available() else 'cpu'
     test_file_list = []
     data_dir = './data/evaluation/'
     testdata_path_list = glob.glob(os.path.join(data_dir + '/*.png'))
-    device = 'cuda:0' if torch.cuda.is_available() else 'cpu'
-    for data_path in testdata_path_list:
+    net.eval()
+    inference_result = []
+    data_file_name = []
+    pred_fun = nn.Softmax(dim=1)
+    for data_path in tqdm(testdata_path_list):
         # preprocess
         image = prepare_input(data_path, size, mean, std)
         image = image.to(device)  # on GPU
 
         # inference
-        net.eval()
-        outputs = net(image)
-        max_value, _ = torch.max(input=outputs, dim=1)
-        # TODO: csvファイルを生成する
+        output = pred_fun(net(image))
+
+        # postprocess
+        output = output.to('cpu').detach().numpy().copy()
+        output = output[0][1] # 0: original, 1: generated
+        inference_result.append(output)
+
+        # extract data_file_name from data_path
+        data_file_name.append(data_path.split('/')[3])
+
+    # data_file_name = (data_path.split('/')[3] for data_path in testdata_path_list)
+
+    result_list = list(zip(data_file_name, inference_result))
+    df = pd.DataFrame(result_list)
+    df.to_csv('./data/upload.csv', index=False, header=False)
 
 
 if __name__ == "__main__":
